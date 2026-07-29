@@ -16,7 +16,7 @@ A web app for tracking household inventory — food, cleaning supplies, and ever
 - **Per-user accounts**: everyone sees only their own inventory.
 - **Expiration awareness**: urgency (expired / danger / warning / safe) is computed from `NotificationPreference` thresholds when pages render. There's no background worker yet — that's a planned future phase.
 
-See [PROJECT_PLAN.md](PROJECT_PLAN.md) for the full data model, phased feature roadmap, and UI/design notes.
+See [PROJECT_PLAN.md](PROJECT_PLAN.md) for the full data model, phased feature roadmap, and UI/design notes, [docs/adr/](docs/adr/) for the reasoning behind key architecture/data-model decisions, and [plans/](plans/) for implementation plans written before non-trivial work.
 
 ## Tech stack
 
@@ -163,6 +163,8 @@ home-goods-manager/
 │   ├── schema.prisma   # Data model
 │   └── migrations/     # Migration history
 ├── docker-compose.yml  # Postgres, pgAdmin, LocalStack
+├── docs/adr/           # Architecture decision records
+├── plans/              # Implementation plans written before non-trivial work
 ├── PROJECT_PLAN.md     # Full data model, roadmap, and design notes
 └── DEVELOPMENT.md      # Extended day-to-day dev workflow notes
 ```
