@@ -1,0 +1,283 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  passwordHash  String
+  name          String
+  householdName String?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  products          Product[]
+  productGroups     ProductGroup[]
+  inventoryItems    InventoryItem[]
+  openedInstances   OpenedInstance[]
+  consumptionLogs   ConsumptionLog[]
+  recipes           Recipe[]
+  recipeMakings     RecipeMaking[]
+  shoppingLists     ShoppingList[]
+  priceHistory      PriceHistory[]
+  notificationPrefs NotificationPreference[]
+
+  @@map("users")
+}
+
+model ProductGroup {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  category  String
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  products Product[]
+
+  @@unique([userId, name])
+  @@map("product_groups")
+}
+
+model Product {
+  id                  String        @id @default(cuid())
+  userId              String
+  user                User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name                String
+  category            String
+  shelfLifeDays       Int?
+  openedShelfLifeDays Int?
+  unitType            String        @default("pieces")
+  productGroupId      String?
+  productGroup        ProductGroup? @relation(fields: [productGroupId], references: [id], onDelete: SetNull)
+  brand               String?
+  barcode             String?
+  notes               String?
+  isArchived          Boolean       @default(false)
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  inventoryItems    InventoryItem[]
+  recipeIngredients RecipeIngredient[]
+  priceHistory      PriceHistory[]
+  shoppingListItems ShoppingListItem[]
+
+  @@index([userId])
+  @@index([productGroupId])
+  @@map("products")
+}
+
+model InventoryItem {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId      String
+  product        Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  quantity       Int      @default(1)
+  purchaseDate   DateTime
+  expirationDate DateTime
+  purchasePrice  Decimal? @db.Decimal(10, 2)
+  location       String?
+  notes          String?
+  isConsumed     Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  openedInstances OpenedInstance[]
+  consumptionLogs ConsumptionLog[]
+
+  @@index([userId])
+  @@index([productId])
+  @@map("inventory_items")
+}
+
+model OpenedInstance {
+  id                      String        @id @default(cuid())
+  userId                  String
+  user                    User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  inventoryItemId         String
+  inventoryItem           InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+  openedDate              DateTime
+  openedShelfLifeDeadline DateTime?
+  quantityRemaining       String        @default("Full")
+  notes                   String?
+  createdAt               DateTime      @default(now())
+  updatedAt               DateTime      @updatedAt
+
+  consumptionLogs ConsumptionLog[]
+
+  @@index([userId])
+  @@index([inventoryItemId])
+  @@map("opened_instances")
+}
+
+// Records a single act of consumption. Exactly one of inventoryItemId /
+// openedInstanceId is set: inventoryItemId is used when whole unit(s) are
+// used up directly (no opened state ever needed, e.g. finishing 2 whole
+// cans at once); openedInstanceId is used when consuming part of an
+// already-opened item. recipeMakingId is set when consumption happened as
+// part of making a recipe.
+model ConsumptionLog {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  inventoryItemId String?
+  inventoryItem   InventoryItem? @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+
+  openedInstanceId String?
+  openedInstance   OpenedInstance? @relation(fields: [openedInstanceId], references: [id], onDelete: Cascade)
+
+  recipeMakingId String?
+  recipeMaking   RecipeMaking? @relation(fields: [recipeMakingId], references: [id], onDelete: SetNull)
+
+  consumedDate DateTime @default(now())
+
+  quantityType      String   @default("Whole") // "Whole" | "Qualitative"
+  quantityWhole     Int? // set when quantityType = "Whole", e.g. 2 full units used
+  qualitativeAmount String? // set when quantityType = "Qualitative": "ALittle" | "Some" | "Half" | "Most" | "All"
+  measuredAmount    Decimal? @db.Decimal(10, 2) // optional precise amount, e.g. grams
+  measuredUnit      String? // e.g. "g", "ml" - only if user wants precision
+
+  notes     String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([inventoryItemId])
+  @@index([openedInstanceId])
+  @@index([recipeMakingId])
+  @@map("consumption_logs")
+}
+
+model Recipe {
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name             String
+  description      String?
+  instructions     String?
+  yieldDescription String?
+  isArchived       Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  ingredients   RecipeIngredient[]
+  recipeMakings RecipeMaking[]
+
+  @@index([userId])
+  @@map("recipes")
+}
+
+model RecipeIngredient {
+  id                  String   @id @default(cuid())
+  recipeId            String
+  recipe              Recipe   @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  productId           String
+  product             Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  quantityDescription String   @default("One")
+  notes               String?
+  createdAt           DateTime @default(now())
+
+  @@index([recipeId])
+  @@index([productId])
+  @@map("recipe_ingredients")
+}
+
+model RecipeMaking {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recipeId  String
+  recipe    Recipe   @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  madeDate  DateTime
+  notes     String?
+  createdAt DateTime @default(now())
+
+  consumptionLogs ConsumptionLog[]
+
+  @@index([userId])
+  @@index([recipeId])
+  @@map("recipe_makings")
+}
+
+model ShoppingList {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  listType  String   @default("Shopping")
+  status    String   @default("Active")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items ShoppingListItem[]
+
+  @@index([userId])
+  @@map("shopping_lists")
+}
+
+model ShoppingListItem {
+  id                  String       @id @default(cuid())
+  shoppingListId      String
+  shoppingList        ShoppingList @relation(fields: [shoppingListId], references: [id], onDelete: Cascade)
+  productId           String?
+  product             Product?     @relation(fields: [productId], references: [id], onDelete: SetNull)
+  customItemName      String?
+  plannedQuantity     Int
+  plannedPriceUnit    Decimal?     @db.Decimal(10, 2)
+  estimatedTotalPrice Decimal?     @db.Decimal(10, 2)
+  isPurchased         Boolean      @default(false)
+  notes               String?
+  createdAt           DateTime     @default(now())
+
+  @@index([shoppingListId])
+  @@index([productId])
+  @@map("shopping_list_items")
+}
+
+model PriceHistory {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId    String
+  product      Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  priceUnit    Decimal  @db.Decimal(10, 2)
+  currency     String   @default("USD")
+  purchaseDate DateTime
+  store        String?
+  notes        String?
+  createdAt    DateTime @default(now())
+
+  @@index([userId])
+  @@index([productId])
+  @@map("price_history")
+}
+
+model NotificationPreference {
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notificationType String
+  daysBeforeExpiry Int      @default(3)
+  isEnabled        Boolean  @default(true)
+  deliveryMethod   String   @default("InApp")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([userId, notificationType])
+  @@index([userId])
+  @@map("notification_preferences")
+}
+
+// Note: no persisted alert/queue table for now. Expiration urgency is
+// computed on the fly at render time (see lib/utils.ts) using
+// NotificationPreference thresholds. A worker-backed alert table can be
+// added later if background notifications (email/push) are built.
